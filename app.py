@@ -1,196 +1,246 @@
 
-from flask import Flask, render_template, request
-from gradio_client import Client, handle_file
-from werkzeug.utils import secure_filename
+import streamlit as st
+from gradio_client import Client
+from PIL import Image
 import os
 
-app = Flask(__name__)
+st.set_page_config(
+    page_title="PlantCare AI",
+    page_icon="🌿",
+    layout="wide"
+)
 
-UPLOAD_FOLDER = "uploads"
-ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+# Green theme and styling
+st.markdown("""
+<style>
+.stApp {
+    background: linear-gradient(135deg, #f0fdf4, #ffffff);
+}
+.main-title {
+    font-size: 42px;
+    font-weight: 800;
+    color: #166534;
+    text-align: center;
+}
+.subtitle {
+    text-align: center;
+    color: #4b5563;
+    font-size: 18px;
+}
+.result-card {
+    background: #dcfce7;
+    padding: 22px;
+    border-radius: 16px;
+    border-left: 6px solid #16a34a;
+}
+</style>
+""", unsafe_allow_html=True)
 
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
-
-client = Client("BesoOOo/plant-disease-classifier")
-
+# Disease information
 DISEASE_INFO = {
     "common rust": {
-        "explanation": "Common rust is a fungal disease affecting corn leaves.",
-        "symptoms": "Reddish-brown raised spots may appear on the leaves.",
-        "prevention": [
-            "Choose resistant corn varieties when available.",
-            "Inspect plants regularly.",
-            "Maintain good airflow between plants.",
-            "Manage infected crop debris appropriately."
-        ]
+        "explanation": "A fungal disease that affects leaves and reduces plant health.",
+        "symptoms": ["Rust-colored or orange-brown pustules on leaves",
+                     "Yellowing around infected areas"],
+        "prevention": ["Use resistant plant varieties.",
+                       "Remove heavily infected plant debris.",
+                       "Avoid excessive leaf wetness."]
     },
     "gray leaf spot": {
-        "explanation": "Gray leaf spot is a fungal disease that affects corn leaves.",
-        "symptoms": "Long, rectangular gray or tan lesions may appear on leaves.",
-        "prevention": [
-            "Choose resistant varieties where available.",
-            "Rotate crops where practical.",
-            "Manage infected crop residue.",
-            "Monitor plants regularly."
-        ]
+        "explanation": "A fungal disease that causes leaf damage, especially in maize.",
+        "symptoms": ["Long, rectangular gray or tan lesions",
+                     "Leaves gradually dry out"],
+        "prevention": ["Use resistant varieties.",
+                       "Rotate crops where practical.",
+                       "Manage infected crop residue."]
     },
     "northern leaf blight": {
-        "explanation": "Northern leaf blight is a fungal disease of corn.",
-        "symptoms": "Long, cigar-shaped gray-green or tan lesions may develop.",
-        "prevention": [
-            "Grow resistant varieties where possible.",
-            "Rotate crops where practical.",
-            "Manage infected crop residue.",
-            "Seek agricultural advice if symptoms spread."
-        ]
+        "explanation": "A fungal disease that causes long lesions on leaves.",
+        "symptoms": ["Long gray-green or tan leaf lesions",
+                     "Premature drying of leaves"],
+        "prevention": ["Plant resistant varieties.",
+                       "Rotate crops.",
+                       "Remove or manage infected residue."]
     },
     "bacterial spot": {
-        "explanation": "Bacterial spot can affect leaves and sometimes fruit.",
-        "symptoms": "Small dark or water-soaked spots may develop yellow edges.",
-        "prevention": [
-            "Use healthy planting material.",
-            "Clean tools regularly.",
-            "Avoid unnecessary leaf wetness.",
-            "Remove affected debris appropriately."
-        ]
+        "explanation": "A bacterial disease that can affect leaves and fruit.",
+        "symptoms": ["Small dark spots on leaves",
+                     "Yellowing and possible leaf drop"],
+        "prevention": ["Use healthy seeds or seedlings.",
+                       "Avoid working with wet plants.",
+                       "Remove infected plant debris."]
     },
     "late blight": {
-        "explanation": "Late blight is a serious disease of potatoes and tomatoes.",
-        "symptoms": "Irregular dark leaf lesions may spread quickly in wet conditions.",
-        "prevention": [
-            "Use healthy planting material.",
-            "Choose resistant varieties where available.",
-            "Avoid prolonged leaf wetness.",
-            "Seek local agricultural advice promptly."
-        ]
+        "explanation": "A serious disease of potatoes and tomatoes that spreads in favorable conditions.",
+        "symptoms": ["Dark, water-soaked leaf patches",
+                     "Rapidly spreading brown lesions"],
+        "prevention": ["Use healthy planting material.",
+                       "Improve airflow around plants.",
+                       "Remove infected plants safely."]
     },
     "powdery mildew": {
-        "explanation": "Powdery mildew is a fungal disease affecting many plants.",
-        "symptoms": "White or gray powder-like patches may appear on leaves.",
-        "prevention": [
-            "Provide adequate spacing and airflow.",
-            "Avoid excessive nitrogen fertilizer.",
-            "Inspect plants regularly.",
-            "Use plant-specific treatments recommended by experts."
-        ]
+        "explanation": "A fungal disease that produces a powder-like coating on plant surfaces.",
+        "symptoms": ["White powdery patches on leaves",
+                     "Leaf curling or yellowing"],
+        "prevention": ["Provide good airflow.",
+                       "Avoid overcrowding plants.",
+                       "Remove severely affected leaves."]
     },
     "healthy": {
-        "explanation": "The model classified the leaf as healthy.",
-        "symptoms": "No disease symptoms were identified by the model in this image.",
-        "prevention": [
-            "Inspect plants regularly.",
-            "Provide appropriate water and sunlight.",
-            "Maintain suitable spacing.",
-            "Keep gardening tools clean."
-        ]
+        "explanation": "The model classified the uploaded leaf as healthy.",
+        "symptoms": ["No obvious disease signs detected by the model"],
+        "prevention": ["Water appropriately.",
+                       "Provide suitable sunlight and nutrients.",
+                       "Inspect leaves regularly."]
     }
 }
 
 
 def get_disease_info(label):
-    name = (label or "").lower().replace("_", " ").strip()
-
-    for disease, info in DISEASE_INFO.items():
-        if disease in name:
+    name = str(label).lower().replace("_", " ")
+    for key, info in DISEASE_INFO.items():
+        if key in name:
             return info
 
     return {
         "explanation": (
-            f"The model predicted: {label}. "
-            "This result is not a confirmed diagnosis."
+            "The AI identified this as a possible plant condition. "
+            "The prediction alone may not confirm the diagnosis."
         ),
-        "symptoms": (
-            "Check the plant for spots, yellowing, wilting, "
-            "or unusual growth."
-        ),
+        "symptoms": [
+            "Compare the leaf with the predicted disease name.",
+            "Look for unusual spots, discoloration or leaf damage."
+        ],
         "prevention": [
-            "Inspect other leaves and nearby plants.",
-            "Keep tools clean.",
-            "Provide suitable water and plant spacing.",
-            "Confirm the diagnosis with an agricultural expert before treatment."
+            "Keep the plant area clean.",
+            "Avoid overwatering and inspect the plant regularly.",
+            "Ask a local agricultural expert if symptoms persist."
         ]
     }
 
 
-def allowed_file(filename):
-    return (
-        "." in filename
-        and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+@st.cache_resource
+def load_model():
+    return Client("BesoOOo/plant-disease-classifier")
+
+
+# Header
+st.markdown(
+    '<div class="main-title">🌿 PlantCare AI</div>',
+    unsafe_allow_html=True
+)
+st.markdown(
+    '<div class="subtitle">AI-powered plant leaf disease detection and care guide</div>',
+    unsafe_allow_html=True
+)
+
+st.write("")
+st.info(
+    "Upload a clear image of a plant leaf to get an AI prediction, "
+    "symptoms, and prevention suggestions."
+)
+
+left, right = st.columns([1, 1], gap="large")
+
+with left:
+    st.subheader("📷 Upload a leaf")
+    uploaded_file = st.file_uploader(
+        "Choose a leaf image",
+        type=["jpg", "jpeg", "png", "webp"]
     )
 
+    if uploaded_file:
+        image = Image.open(uploaded_file).convert("RGB")
+        st.image(image, caption="Your uploaded leaf", use_container_width=True)
 
-@app.route("/", methods=["GET", "POST"])
-def home():
-    result = None
-    confidence = None
-    error = None
-    disease_info = None
+    analyze = st.button(
+        "🔍 Detect Plant Disease",
+        type="primary",
+        use_container_width=True,
+        disabled=uploaded_file is None
+    )
 
-    if request.method == "POST":
-        file = request.files.get("leaf_image")
+with right:
+    st.subheader("🌱 Diagnosis")
 
-        if file is None or not file.filename:
-            error = "Please select a leaf image."
-
-        elif not allowed_file(file.filename):
-            error = "Please upload a JPG, JPEG, PNG, or WEBP image."
-
-        else:
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
-
-            try:
-                file.save(filepath)
-
+    if analyze and uploaded_file:
+        try:
+            with st.spinner("Analyzing the leaf... please wait"):
+                image = Image.open(uploaded_file).convert("RGB")
+                client = load_model()
                 response = client.predict(
-                    pil_image=handle_file(filepath),
+                    pil_image=image,
                     api_name="/predict"
                 )
 
-                print("AI RESPONSE:", repr(response))
+            label = None
+            confidence = None
 
-                if isinstance(response, dict):
-                    predictions = response.get("confidences", [])
+            if isinstance(response, dict):
+                predictions = response.get("confidences", [])
 
-                    if predictions:
-                        best = max(
-                            predictions,
-                            key=lambda item: float(item.get("confidence", 0))
-                        )
-                        result = best.get("label")
-                        score = best.get("confidence")
-                    else:
-                        result = response.get("label")
-                        score = response.get("confidence")
+                if predictions:
+                    best = max(
+                        predictions,
+                        key=lambda item: float(item.get("confidence", 0))
+                    )
+                    label = best.get("label")
+                    score = best.get("confidence")
 
                     if score is not None:
-                        confidence = round(float(score) * 100, 2)
-
-                if result:
-                    disease_info = get_disease_info(result)
+                        confidence = float(score) * 100
                 else:
-                    error = "No disease name was returned by the model."
+                    label = response.get("label")
+                    score = response.get("confidence")
 
-            except Exception as exc:
-                print("PREDICTION ERROR:", repr(exc))
-                error = (
-                    "Prediction failed. Check the internet connection "
-                    "and application logs."
+                    if score is not None:
+                        confidence = float(score) * 100
+
+            if label:
+                st.success("Analysis complete!")
+
+                st.markdown(
+                    f'<div class="result-card">'
+                    f'<h3>🌿 {label}</h3>'
+                    f'</div>',
+                    unsafe_allow_html=True
                 )
 
-            finally:
-                if os.path.exists(filepath):
-                    os.remove(filepath)
+                if confidence is not None:
+                    st.metric("Model confidence", f"{confidence:.2f}%")
 
-    return render_template(
-        "index.html",
-        result=result,
-        confidence=confidence,
-        disease_info=disease_info,
-        error=error
-    )
+                info = get_disease_info(label)
 
+                st.subheader("📖 About this condition")
+                st.write(info["explanation"])
 
-if __name__ == "__main__":
-    app.run(debug=True)
+                st.subheader("🔎 Common symptoms")
+                for symptom in info["symptoms"]:
+                    st.markdown(f"- {symptom}")
+
+                st.subheader("🛡️ Prevention and care")
+                for tip in info["prevention"]:
+                    st.markdown(f"- {tip}")
+
+                st.caption(
+                    "AI predictions may be incorrect. Confirm important "
+                    "diagnoses with an agricultural expert."
+                )
+            else:
+                st.warning("The model returned no disease name. Please try another image.")
+
+        except Exception as exc:
+            st.error(
+                "Prediction failed. Please check your internet connection "
+                "and try again."
+            )
+            st.caption(f"Technical details: {exc}")
+
+    else:
+        st.write(
+            "Your disease prediction, confidence score, symptoms and "
+            "prevention tips will appear here after analysis."
+        )
+
+st.divider()
+st.caption("PlantCare AI • Smart plant health assistance 🌿")
