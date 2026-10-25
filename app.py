@@ -14,122 +14,103 @@ app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 
 client = Client("BesoOOo/plant-disease-classifier")
 
-
-# Disease information shown after prediction
 DISEASE_INFO = {
     "common rust": {
-        "explanation": (
-            "Common rust is a fungal disease that affects corn leaves "
-            "and can reduce plant health."
-        ),
-        "symptoms": (
-            "Reddish-brown raised spots on leaves, sometimes surrounded "
-            "by yellow areas."
-        ),
+        "explanation": "Common rust is a fungal disease affecting corn leaves.",
+        "symptoms": "Reddish-brown raised spots may appear on the leaves.",
         "prevention": [
-            "Choose resistant corn varieties where available.",
-            "Check plants regularly for new rust spots.",
+            "Choose resistant corn varieties when available.",
+            "Inspect plants regularly.",
             "Maintain good airflow between plants.",
-            "Remove infected plant debris after the growing season."
+            "Manage infected crop debris appropriately."
         ]
     },
-
     "gray leaf spot": {
-        "explanation": (
-            "Gray leaf spot is a fungal disease that commonly affects corn "
-            "and reduces healthy leaf area."
-        ),
-        "symptoms": (
-            "Long, rectangular gray or tan lesions, often between leaf veins."
-        ),
+        "explanation": "Gray leaf spot is a fungal disease that affects corn leaves.",
+        "symptoms": "Long, rectangular gray or tan lesions may appear on leaves.",
         "prevention": [
-            "Grow resistant varieties when available.",
-            "Manage infected crop residue appropriately.",
+            "Choose resistant varieties where available.",
             "Rotate crops where practical.",
-            "Avoid unnecessary leaf wetness."
+            "Manage infected crop residue.",
+            "Monitor plants regularly."
         ]
     },
-
     "northern leaf blight": {
-        "explanation": (
-            "Northern leaf blight is a fungal disease of corn that can "
-            "damage leaves and reduce crop productivity."
-        ),
-        "symptoms": (
-            "Long, cigar-shaped gray-green or tan lesions on leaves."
-        ),
+        "explanation": "Northern leaf blight is a fungal disease of corn.",
+        "symptoms": "Long, cigar-shaped gray-green or tan lesions may develop.",
         "prevention": [
-            "Choose resistant varieties where possible.",
-            "Rotate crops and manage infected residue.",
-            "Monitor fields during warm, humid weather.",
-            "Seek local agricultural advice if symptoms spread."
+            "Grow resistant varieties where possible.",
+            "Rotate crops where practical.",
+            "Manage infected crop residue.",
+            "Seek agricultural advice if symptoms spread."
         ]
     },
-
-    "healthy": {
-        "explanation": (
-            "The model classified the uploaded leaf as healthy. "
-            "This does not guarantee that the plant is free from every disease."
-        ),
-        "symptoms": (
-            "No disease symptoms were identified by the model in this image."
-        ),
-        "prevention": [
-            "Inspect leaves regularly for changes.",
-            "Water appropriately for the plant species.",
-            "Provide suitable sunlight and spacing.",
-            "Keep gardening tools clean."
-        ]
-    },
-
     "bacterial spot": {
-        "explanation": (
-            "Bacterial spot is a plant disease that can affect leaves "
-            "and sometimes fruit."
-        ),
-        "symptoms": (
-            "Small dark or water-soaked spots that may develop yellow edges."
-        ),
+        "explanation": "Bacterial spot can affect leaves and sometimes fruit.",
+        "symptoms": "Small dark or water-soaked spots may develop yellow edges.",
         "prevention": [
-            "Avoid handling plants while leaves are wet.",
-            "Use clean tools and healthy planting material.",
-            "Avoid overhead watering where practical.",
-            "Remove severely affected plant debris appropriately."
+            "Use healthy planting material.",
+            "Clean tools regularly.",
+            "Avoid unnecessary leaf wetness.",
+            "Remove affected debris appropriately."
         ]
     },
-
     "late blight": {
-        "explanation": (
-            "Late blight is a serious disease affecting potatoes and tomatoes, "
-            "especially in cool, wet conditions."
-        ),
-        "symptoms": (
-            "Irregular dark lesions on leaves that may spread quickly; "
-            "white growth can appear in humid conditions."
-        ),
+        "explanation": "Late blight is a serious disease of potatoes and tomatoes.",
+        "symptoms": "Irregular dark leaf lesions may spread quickly in wet conditions.",
         "prevention": [
-            "Use healthy planting material and resistant varieties where available.",
+            "Use healthy planting material.",
+            "Choose resistant varieties where available.",
             "Avoid prolonged leaf wetness.",
-            "Remove infected plants or debris according to local guidance.",
-            "Contact an agricultural expert promptly if suspected."
+            "Seek local agricultural advice promptly."
         ]
     },
-
     "powdery mildew": {
-        "explanation": (
-            "Powdery mildew is a fungal disease that affects many plant types."
-        ),
-        "symptoms": (
-            "White or gray powder-like patches on leaves and stems."
-        ),
+        "explanation": "Powdery mildew is a fungal disease affecting many plants.",
+        "symptoms": "White or gray powder-like patches may appear on leaves.",
         "prevention": [
             "Provide adequate spacing and airflow.",
-            "Avoid excessive nitrogen fertilization.",
-            "Remove heavily affected leaves when appropriate.",
-            "Use plant-specific treatments recommended by local experts."
+            "Avoid excessive nitrogen fertilizer.",
+            "Inspect plants regularly.",
+            "Use plant-specific treatments recommended by experts."
+        ]
+    },
+    "healthy": {
+        "explanation": "The model classified the leaf as healthy.",
+        "symptoms": "No disease symptoms were identified by the model in this image.",
+        "prevention": [
+            "Inspect plants regularly.",
+            "Provide appropriate water and sunlight.",
+            "Maintain suitable spacing.",
+            "Keep gardening tools clean."
         ]
     }
 }
+
+
+def get_disease_info(label):
+    name = (label or "").lower().replace("_", " ").strip()
+
+    for disease, info in DISEASE_INFO.items():
+        if disease in name:
+            return info
+
+    return {
+        "explanation": (
+            f"The model predicted: {label}. "
+            "This result is not a confirmed diagnosis."
+        ),
+        "symptoms": (
+            "Check the plant for spots, yellowing, wilting, "
+            "or unusual growth."
+        ),
+        "prevention": [
+            "Inspect other leaves and nearby plants.",
+            "Keep tools clean.",
+            "Provide suitable water and plant spacing.",
+            "Confirm the diagnosis with an agricultural expert before treatment."
+        ]
+    }
 
 
 def allowed_file(filename):
@@ -137,35 +118,6 @@ def allowed_file(filename):
         "." in filename
         and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
     )
-
-
-def get_disease_info(label):
-    """Return information matching the predicted disease label."""
-
-    name = (label or "").lower().replace("_", " ").strip()
-
-    # Find a known disease in labels such as "Corn - Common Rust".
-    for disease, info in DISEASE_INFO.items():
-        if disease in name:
-            return info
-
-    # Do not invent a specific diagnosis or treatment.
-    return {
-        "explanation": (
-            f"The AI model identified the condition as '{label}'. "
-            "This is an automated prediction and may not be a confirmed diagnosis."
-        ),
-        "symptoms": (
-            "Check the leaf for spots, yellowing, wilting, discoloration, "
-            "or unusual growth. Symptoms vary by crop and disease."
-        ),
-        "prevention": [
-            "Inspect other leaves and nearby plants for similar symptoms.",
-            "Keep tools clean and avoid unnecessary leaf wetness.",
-            "Provide appropriate water, sunlight, and plant spacing.",
-            "Confirm the diagnosis with a local agricultural expert before treatment."
-        ]
-    }
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -204,37 +156,27 @@ def home():
                     if predictions:
                         best = max(
                             predictions,
-                            key=lambda item: float(
-                                item.get("confidence", 0)
-                            )
+                            key=lambda item: float(item.get("confidence", 0))
                         )
-
                         result = best.get("label")
                         score = best.get("confidence")
-
-                        if score is not None:
-                            confidence = round(float(score) * 100, 2)
-
                     else:
                         result = response.get("label")
                         score = response.get("confidence")
 
-                        if score is not None:
-                            confidence = round(float(score) * 100, 2)
+                    if score is not None:
+                        confidence = round(float(score) * 100, 2)
 
                 if result:
                     disease_info = get_disease_info(result)
                 else:
-                    error = (
-                        "The model returned no disease name. "
-                        "Check the Terminal."
-                    )
+                    error = "No disease name was returned by the model."
 
             except Exception as exc:
                 print("PREDICTION ERROR:", repr(exc))
                 error = (
-                    "Prediction failed. Check your internet connection "
-                    "and Terminal."
+                    "Prediction failed. Check the internet connection "
+                    "and application logs."
                 )
 
             finally:
