@@ -1,0 +1,183 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Plant Disease Detection</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #edf7ed;
+            padding: 25px;
+            color: #23402a;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 650px;
+            margin: 30px auto;
+            padding: 25px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px #0002;
+        }
+
+        h1, h2, h3 {
+            color: #24743b;
+        }
+
+        button {
+            background: #278443;
+            color: white;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background: #1d6833;
+        }
+
+        input {
+            padding: 12px;
+            max-width: 100%;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .result {
+            background: #eff9ef;
+            padding: 20px;
+            margin-top: 25px;
+            border-radius: 10px;
+            overflow-wrap: anywhere;
+        }
+
+        .disease {
+            font-size: 21px;
+            font-weight: bold;
+        }
+
+        .confidence {
+            font-size: 24px;
+            font-weight: bold;
+            color: #24743b;
+        }
+
+        .info-section {
+            background: white;
+            padding: 15px;
+            margin-top: 16px;
+            border-radius: 10px;
+            border-left: 5px solid #278443;
+        }
+
+        .info-section h3 {
+            margin-top: 0;
+        }
+
+        .info-section ul {
+            padding-left: 22px;
+        }
+
+        .error {
+            color: #a00000;
+            margin-top: 20px;
+        }
+
+        .note {
+            color: #526b57;
+            font-size: 13px;
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+
+            .container {
+                margin: 10px auto;
+                padding: 18px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🌱 AI Plant Disease Detection</h1>
+        <p>Upload a plant leaf image to predict its possible disease.</p>
+
+        <form method="POST" enctype="multipart/form-data">
+            <label for="leaf_image">Choose a leaf image:</label>
+
+            <input
+                type="file"
+                id="leaf_image"
+                name="leaf_image"
+                accept=".png,.jpg,.jpeg,.webp"
+                required
+            >
+
+            <button type="submit">Detect Disease</button>
+        </form>
+
+        {% if result %}
+        <div class="result">
+            <h2>🔍 Prediction Result</h2>
+
+            <p>Predicted condition:</p>
+            <p class="disease">{{ result }}</p>
+
+            <p>Confidence Level:</p>
+
+            {% if confidence is not none %}
+                <p class="confidence">
+                    {{ "%.2f"|format(confidence) }}%
+                </p>
+            {% else %}
+                <p>Confidence score was not returned.</p>
+            {% endif %}
+
+            {% if disease_info %}
+            <div class="info-section">
+                <h3>📖 Disease Explanation</h3>
+                <p>{{ disease_info.explanation }}</p>
+            </div>
+
+            <div class="info-section">
+                <h3>🔎 Symptoms</h3>
+                <p>{{ disease_info.symptoms }}</p>
+            </div>
+
+            <div class="info-section">
+                <h3>🛡️ Prevention and Care</h3>
+                <ul>
+                    {% for advice in disease_info.prevention %}
+                    <li>{{ advice }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <p class="note">
+                This is an AI-based prediction, not a confirmed diagnosis.
+                Confirm the disease before applying treatment.
+            </p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if error %}
+        <p class="error">{{ error }}</p>
+        {% endif %}
+    </div>
+</body>
+</html>
