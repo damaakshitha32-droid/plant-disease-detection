@@ -1,107 +1,254 @@
-import streamlit as st
-from PIL import Image
-from transformers import pipeline
 
-st.set_page_config(
-    page_title="AI Plant Disease Detection",
-    page_icon="🌿",
-    layout="centered"
-)
+from flask import Flask, render_template, request
+from gradio_client import Client, handle_file
+from werkzeug.utils import secure_filename
+import os
 
-MODEL_NAME = "Kathir56/plant-disease-tamilnadu"
+app = Flask(__name__)
+
+UPLOAD_FOLDER = "uploads"
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
+
+client = Client("BesoOOo/plant-disease-classifier")
 
 
-@st.cache_resource
-def load_model():
-    return pipeline(
-        "image-classification",
-        model=MODEL_NAME
+# Disease information shown after prediction
+DISEASE_INFO = {
+    "common rust": {
+        "explanation": (
+            "Common rust is a fungal disease that affects corn leaves "
+            "and can reduce plant health."
+        ),
+        "symptoms": (
+            "Reddish-brown raised spots on leaves, sometimes surrounded "
+            "by yellow areas."
+        ),
+        "prevention": [
+            "Choose resistant corn varieties where available.",
+            "Check plants regularly for new rust spots.",
+            "Maintain good airflow between plants.",
+            "Remove infected plant debris after the growing season."
+        ]
+    },
+
+    "gray leaf spot": {
+        "explanation": (
+            "Gray leaf spot is a fungal disease that commonly affects corn "
+            "and reduces healthy leaf area."
+        ),
+        "symptoms": (
+            "Long, rectangular gray or tan lesions, often between leaf veins."
+        ),
+        "prevention": [
+            "Grow resistant varieties when available.",
+            "Manage infected crop residue appropriately.",
+            "Rotate crops where practical.",
+            "Avoid unnecessary leaf wetness."
+        ]
+    },
+
+    "northern leaf blight": {
+        "explanation": (
+            "Northern leaf blight is a fungal disease of corn that can "
+            "damage leaves and reduce crop productivity."
+        ),
+        "symptoms": (
+            "Long, cigar-shaped gray-green or tan lesions on leaves."
+        ),
+        "prevention": [
+            "Choose resistant varieties where possible.",
+            "Rotate crops and manage infected residue.",
+            "Monitor fields during warm, humid weather.",
+            "Seek local agricultural advice if symptoms spread."
+        ]
+    },
+
+    "healthy": {
+        "explanation": (
+            "The model classified the uploaded leaf as healthy. "
+            "This does not guarantee that the plant is free from every disease."
+        ),
+        "symptoms": (
+            "No disease symptoms were identified by the model in this image."
+        ),
+        "prevention": [
+            "Inspect leaves regularly for changes.",
+            "Water appropriately for the plant species.",
+            "Provide suitable sunlight and spacing.",
+            "Keep gardening tools clean."
+        ]
+    },
+
+    "bacterial spot": {
+        "explanation": (
+            "Bacterial spot is a plant disease that can affect leaves "
+            "and sometimes fruit."
+        ),
+        "symptoms": (
+            "Small dark or water-soaked spots that may develop yellow edges."
+        ),
+        "prevention": [
+            "Avoid handling plants while leaves are wet.",
+            "Use clean tools and healthy planting material.",
+            "Avoid overhead watering where practical.",
+            "Remove severely affected plant debris appropriately."
+        ]
+    },
+
+    "late blight": {
+        "explanation": (
+            "Late blight is a serious disease affecting potatoes and tomatoes, "
+            "especially in cool, wet conditions."
+        ),
+        "symptoms": (
+            "Irregular dark lesions on leaves that may spread quickly; "
+            "white growth can appear in humid conditions."
+        ),
+        "prevention": [
+            "Use healthy planting material and resistant varieties where available.",
+            "Avoid prolonged leaf wetness.",
+            "Remove infected plants or debris according to local guidance.",
+            "Contact an agricultural expert promptly if suspected."
+        ]
+    },
+
+    "powdery mildew": {
+        "explanation": (
+            "Powdery mildew is a fungal disease that affects many plant types."
+        ),
+        "symptoms": (
+            "White or gray powder-like patches on leaves and stems."
+        ),
+        "prevention": [
+            "Provide adequate spacing and airflow.",
+            "Avoid excessive nitrogen fertilization.",
+            "Remove heavily affected leaves when appropriate.",
+            "Use plant-specific treatments recommended by local experts."
+        ]
+    }
+}
+
+
+def allowed_file(filename):
+    return (
+        "." in filename
+        and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
     )
 
 
-st.title("🌿 AI Plant Disease Detection")
-st.write(
-    "Upload a leaf image to predict its likely disease "
-    "using a pretrained AI model."
-)
+def get_disease_info(label):
+    """Return information matching the predicted disease label."""
 
-st.info(
-    "Supported crops include corn, tomato, potato, "
-    "and several other plants."
-)
+    name = (label or "").lower().replace("_", " ").strip()
 
-uploaded_file = st.file_uploader(
-    "Choose a leaf image",
-    type=["jpg", "jpeg", "png"]
-)
+    # Find a known disease in labels such as "Corn - Common Rust".
+    for disease, info in DISEASE_INFO.items():
+        if disease in name:
+            return info
 
-if uploaded_file is not None:
-    try:
-        image = Image.open(uploaded_file).convert("RGB")
-        st.image(
-            image,
-            caption="Uploaded leaf image",
-            use_container_width=True
-        )
+    # Do not invent a specific diagnosis or treatment.
+    return {
+        "explanation": (
+            f"The AI model identified the condition as '{label}'. "
+            "This is an automated prediction and may not be a confirmed diagnosis."
+        ),
+        "symptoms": (
+            "Check the leaf for spots, yellowing, wilting, discoloration, "
+            "or unusual growth. Symptoms vary by crop and disease."
+        ),
+        "prevention": [
+            "Inspect other leaves and nearby plants for similar symptoms.",
+            "Keep tools clean and avoid unnecessary leaf wetness.",
+            "Provide appropriate water, sunlight, and plant spacing.",
+            "Confirm the diagnosis with a local agricultural expert before treatment."
+        ]
+    }
 
-        if st.button("Detect Plant Disease", type="primary"):
-            with st.spinner(
-                "Loading AI model and analyzing image..."
-            ):
-                classifier = load_model()
-                predictions = classifier(image, top_k=3)
 
-            best = predictions[0]
-            label = best["label"]
-            confidence = float(best["score"])
+@app.route("/", methods=["GET", "POST"])
+def home():
+    result = None
+    confidence = None
+    error = None
+    disease_info = None
 
-            display_label = (
-                label.replace("___", " - ")
-                .replace("__", " - ")
-                .replace("_", " ")
-            )
+    if request.method == "POST":
+        file = request.files.get("leaf_image")
 
-            st.subheader("Prediction Result")
-            st.write(f"**Predicted class:** {display_label}")
-            st.metric(
-                "Model confidence",
-                f"{confidence * 100:.2f}%"
-            )
+        if file is None or not file.filename:
+            error = "Please select a leaf image."
 
-            if confidence < 0.60:
-                st.warning(
-                    "The model is not very confident. "
-                    "Try a clear photo of a single leaf "
-                    "and seek expert confirmation."
-                )
-            else:
-                st.caption(
-                    "Confidence is the model's score, "
-                    "not a guarantee that the prediction is correct."
+        elif not allowed_file(file.filename):
+            error = "Please upload a JPG, JPEG, PNG, or WEBP image."
+
+        else:
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+
+            try:
+                file.save(filepath)
+
+                response = client.predict(
+                    pil_image=handle_file(filepath),
+                    api_name="/predict"
                 )
 
-            st.subheader("Other possible predictions")
-            for item in predictions[1:]:
-                other_label = (
-                    item["label"]
-                    .replace("___", " - ")
-                    .replace("__", " - ")
-                    .replace("_", " ")
-                )
-                st.write(
-                    f"- {other_label}: "
-                    f"{item['score'] * 100:.2f}%"
+                print("AI RESPONSE:", repr(response))
+
+                if isinstance(response, dict):
+                    predictions = response.get("confidences", [])
+
+                    if predictions:
+                        best = max(
+                            predictions,
+                            key=lambda item: float(
+                                item.get("confidence", 0)
+                            )
+                        )
+
+                        result = best.get("label")
+                        score = best.get("confidence")
+
+                        if score is not None:
+                            confidence = round(float(score) * 100, 2)
+
+                    else:
+                        result = response.get("label")
+                        score = response.get("confidence")
+
+                        if score is not None:
+                            confidence = round(float(score) * 100, 2)
+
+                if result:
+                    disease_info = get_disease_info(result)
+                else:
+                    error = (
+                        "The model returned no disease name. "
+                        "Check the Terminal."
+                    )
+
+            except Exception as exc:
+                print("PREDICTION ERROR:", repr(exc))
+                error = (
+                    "Prediction failed. Check your internet connection "
+                    "and Terminal."
                 )
 
-            st.warning(
-                "This is an AI screening result, not a "
-                "confirmed diagnosis. Do not choose a "
-                "pesticide based on this prediction alone."
-            )
+            finally:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
 
-    except Exception as error:
-        st.error(
-            "The image could not be analyzed. "
-            "Check your internet connection and try again."
-        )
-        st.caption(f"Technical details: {error}")
+    return render_template(
+        "index.html",
+        result=result,
+        confidence=confidence,
+        disease_info=disease_info,
+        error=error
+    )
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
